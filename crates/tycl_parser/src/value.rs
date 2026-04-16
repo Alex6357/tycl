@@ -596,3 +596,121 @@ impl<T: TryFromValue> TryFromValue for Option<T> {
         }
     }
 }
+
+// ========================================================================
+// Display implementations
+// ========================================================================
+
+impl std::fmt::Display for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (key, value) in &self.root {
+            write!(f, "{} = ", key)?;
+            value.fmt_indented(f, 0)?;
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_indented(f, 0)
+    }
+}
+
+impl Value {
+    fn fmt_indented(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+        match self {
+            Value::Null => write!(f, "null"),
+            Value::Bool(true) => write!(f, "true"),
+            Value::Bool(false) => write!(f, "false"),
+            Value::Integer(n) => write!(f, "{}", n),
+            Value::Float(n) => write!(f, "{}", n),
+            Value::String(s) => {
+                if s.contains('\n') || s.contains('"') {
+                    if s.contains("\"\"\"") {
+                        write!(f, "r#\"{}\"#", s)
+                    } else {
+                        write!(f, "\"\"\"{}\"\"\"", s)
+                    }
+                } else {
+                    write!(f, "\"{}\"", escape_string(s))
+                }
+            }
+            Value::Time(tv) => write!(f, "{}", tv),
+            Value::List(items) => {
+                write!(f, "[")?;
+                if !items.is_empty() {
+                    writeln!(f)?;
+                    for item in items {
+                        write_indent(f, indent + 1)?;
+                        item.fmt_indented(f, indent + 1)?;
+                        writeln!(f, ",")?;
+                    }
+                    write_indent(f, indent)?;
+                }
+                write!(f, "]")
+            }
+            Value::Map(entries) | Value::Record(entries) => {
+                write!(f, "{{")?;
+                if !entries.is_empty() {
+                    writeln!(f)?;
+                    for (key, value) in entries {
+                        write_indent(f, indent + 1)?;
+                        write!(f, "{} = ", key)?;
+                        value.fmt_indented(f, indent + 1)?;
+                        writeln!(f, ",")?;
+                    }
+                    write_indent(f, indent)?;
+                }
+                write!(f, "}}")
+            }
+            Value::Tuple(items) => {
+                write!(f, "(")?;
+                if !items.is_empty() {
+                    writeln!(f)?;
+                    for item in items {
+                        write_indent(f, indent + 1)?;
+                        item.fmt_indented(f, indent + 1)?;
+                        writeln!(f, ",")?;
+                    }
+                    write_indent(f, indent)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for TimeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeValue::LocalDate(s)
+            | TimeValue::LocalTime(s)
+            | TimeValue::LocalDateTime(s)
+            | TimeValue::OffsetDateTime(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+fn write_indent(f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+    for _ in 0..indent {
+        write!(f, "  ")?;
+    }
+    Ok(())
+}
+
+fn escape_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out
+}

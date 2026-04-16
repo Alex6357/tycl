@@ -1340,4 +1340,44 @@ content
             assert_eq!(recovered, tv);
         }
     }
+
+    #[test]
+    fn display_simple_document() {
+        use std::collections::BTreeMap;
+        let mut root = BTreeMap::new();
+        root.insert("name".to_string(), Value::String("hello".to_string()));
+        root.insert("count".to_string(), Value::Integer(42));
+        let doc = Document { root };
+        let s = doc.to_string();
+        assert!(s.contains("name = \"hello\"\n"));
+        assert!(s.contains("count = 42\n"));
+    }
+
+    #[test]
+    fn display_nested_structures() {
+        let source = r#"
+config = { a = 1, b = "two" }
+pair = (true, null)
+items = [1, 2, 3]
+"#;
+        let doc = parse(source).unwrap();
+        let s = doc.to_string();
+        assert!(s.contains("config = {\n  a = 1,\n  b = \"two\",\n}"));
+        assert!(s.contains("pair = (\n  true,\n  null,\n)"));
+        assert!(s.contains("items = [\n  1,\n  2,\n  3,\n]"));
+    }
+
+    #[test]
+    fn display_string_quoting() {
+        use std::collections::BTreeMap;
+        let mut root = BTreeMap::new();
+        root.insert("simple".to_string(), Value::String("hello".to_string()));
+        root.insert("with_quote".to_string(), Value::String(r#"say "hi""#.to_string()));
+        root.insert("with_newline".to_string(), Value::String("line1\nline2".to_string()));
+        let doc = Document { root };
+        let s = doc.to_string();
+        assert!(s.contains(r#"simple = "hello""#));
+        assert!(s.contains(r#"with_quote = """say "hi""""#));
+        assert!(s.contains("with_newline = \"\"\"line1\nline2\"\"\""));
+    }
 }
