@@ -451,7 +451,15 @@ dependencies = [
  "serde_yaml",
  "syn",
  "toml",
+ "tycl_edit",
  "tycl_parser",
+]
+
+[[package]]
+name = "tycl_edit"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
 ]
 
 [[package]]

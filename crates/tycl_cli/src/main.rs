@@ -14,6 +14,7 @@ struct Cli {
 #[derive(clap::Subcommand)]
 enum Command {
     Convert(cmd::convert::Args),
+    Format(cmd::format::Args),
     Generate(cmd::generate::Args),
 }
 
@@ -21,6 +22,7 @@ fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Convert(args) => cmd::convert::run(args),
+        Command::Format(args) => cmd::format::run(args),
         Command::Generate(args) => cmd::generate::run(args),
     };
     if let Err(e) = result {
