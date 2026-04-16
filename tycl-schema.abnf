@@ -1,0 +1,122 @@
+(* ==================== 1. File Format ==================== *)
+
+document        = ws [ kv-pair *( required-nl kv-pair ) ] ws ;
+required-nl     = *( space / tab / comment ) newline ws ;
+kv-pair         = key [ target-name ] ws [ ":" ws type ws ] "=" ws value ;
+
+
+(* ==================== 2. Whitespace and Comment ==================== *)
+
+ws              = *( space / tab / newline / comment ) ;
+space           = SP ;
+tab             = HTAB ;
+newline         = LF / CRLF ;
+comment         = "//" *( non-newline-char ) ;
+non-newline-char= %x09 / %x20-10FFFF ;
+
+
+(* ==================== 3. Key and Type ==================== *)
+
+key             = builtin-key / identifier / literal-key ;
+builtin-key     = "$" identifier ;
+identifier      = alpha *( alpha / digit / "-" / "_" ) ;
+literal-key     = DQUOTE *( basic-char / escaped-char ) DQUOTE ;
+alpha           = lower-alpha / upper-alpha ;
+lower-alpha     = %x61-7A ;
+upper-alpha     = %x41-5A ;
+
+target-name     = "(" ws 1*target-char ws ")" ;
+
+type            = ( base-type / time-type / container-type / enum-type / env-type / %s"any" ) [ "?" ] ;
+base-type       = str-type / int-type / float-type / %s"bool" ;
+str-type        = %s"str" [ "(" literal-string ")" ] ;
+int-type        = %s"int" [ "(" integer ".." integer ")" ] ;
+float-type      = %s"float" [ "(" float ".." float ")" ] ;
+
+time-type       = %s"time" "(" time-sub-type ")" ;
+time-sub-type   = %s"localdate" / %s"localtime" / %s"datetime" / %s"offset" ;
+
+container-type  = map-type / list-type / record-type / tuple-type ;
+map-type        = %s"map" "(" ws type ws ")" ;
+list-type       = %s"list" "(" ws type ws ")" ;
+record-type     = %s"record" [ target-name ] "(" ws record-fields ws ")" ;
+record-fields   = record-field *( ws "," ws record-field ) [ ws "," ] ;
+record-field    = identifier [ target-name ] ws ":" ws type [ ws "=" ws value ] ;
+tuple-type      = %s"tuple" [ target-name ] "(" ws type *( ws "," ws type ) [ ws "," ] ws ")" ;
+
+enum-type       = %s"enum" [ target-name ] "(" ws enum-elements ws ")" ;
+enum-elements   = enum-element *( ws "," ws enum-element ) [ ws "," ] ;
+enum-element    = basic-string [ target-name ] ;
+
+env-type        = %s"env" "(" ws basic-string ws [ "," ws base-type ] ws ")" ;
+
+
+(* ==================== 4. Value and Container ==================== *)
+
+value           = time-value / string / number / boolean / null / list / map / tuple;
+list            = "[" ws [ value *( ws "," ws value ) [ ws "," ] ws ] "]" ;
+map             = "{" ws [ kv-pair *( ws "," ws kv-pair ) [ ws "," ] ws ] "}" ;
+tuple           = "(" ws [ value *( ws "," ws value ) [ ws "," ] ws ] ")" ;
+
+
+(* ==================== 5. String ==================== *)
+
+string          = basic-string / ml-string / literal-string / aligned-ml-string / aligned-literal-string ;
+basic-string    = DQUOTE *( basic-char / escaped-char ) DQUOTE ;
+ml-string       = 3DQUOTE [ newline ] *( ml-char / ml-escaped-char ) 3DQUOTE ;
+literal-string  = %s"r" literal-hash DQUOTE *literal-char DQUOTE literal-hash ;
+literal-hash    = *HASH ;
+
+aligned-ml-string = "|" 3DQUOTE [ newline ] *( aligned-line ) [ aligned-last-line ] [ newline ] 3DQUOTE ;
+ws-trigger        = *( space / tab ) "|" ;
+aligned-line      = ws-trigger *( ml-char / ml-escaped-char ) newline ;
+aligned-last-line = ws-trigger *( ml-char / ml-escaped-char ) ;
+
+aligned-literal-string    = %s"r|" literal-hash DQUOTE [ newline ] *( aligned-literal-line ) [ aligned-literal-last-line ] [ newline ] DQUOTE literal-hash ;
+aligned-literal-line      = ws-trigger *literal-char-no-nl newline ;
+aligned-literal-last-line = ws-trigger *literal-char-no-nl ;
+
+
+(* ==================== 6. Basic Value ==================== *)
+
+number          = float / integer ;
+integer         = [ "-" / "+" ] unsigned-int ;
+float           = dec-int "." [ frac ] [ exp ] / dec-int exp / "." frac [ exp ] ;
+unsigned-int    = DIGIT *( [ "_" ] DIGIT ) ;
+dec-int         = unsigned-int ;
+frac            = unsigned-int ;
+exp             = ( %s"e" / %s"E" ) [ "+" / "-" ] unsigned-int ;
+boolean         = %s"true" / %s"false" ;
+null            = %s"null" ;
+
+
+(* ==================== 7. Time ==================== *)
+
+time-value      = offset-datetime / local-datetime / local-date / local-time ;
+local-date      = date-full "-" date-month "-" date-mday ;
+local-time      = time-hour ":" time-minute ":" time-second [ "." time-secfrac ] ;
+local-datetime  = local-date %s"T" local-time ;
+offset-datetime = local-datetime time-offset ;
+time-offset     = %s"Z" / ( "+" / "-" ) time-hour ":" time-minute ;
+
+
+(* ==================== 8. Char Set ==================== *)
+
+HASH            = "#" ;
+DIGIT = %x30-39 ;
+HEXDIG          = DIGIT / "a" / "b" / "c" / "d" / "e" / "f" / "A" / "B" / "C" / "D" / "E" / "F" ;
+basic-char      = %x20-21 / %x23-5B / %x5D-10FFFF ; 
+ml-char         = %x09 / %x0A / %x0D / %x20-5B / %x5D-10FFFF ;
+literal-char    = %x09 / %x0A / %x0D / %x20-10FFFF ; 
+literal-char-no-nl = %x09 / %x20-10FFFF ;
+escaped-char    = "\" ( %s"b" / %s"f" / %s"n" / %s"r" / %s"t" / "\" / "'" / DQUOTE / %s"u" 4HEXDIG / %s"U" 8HEXDIG ) ;
+ml-escaped-char = escaped-char ; 
+target-char     = %x20-21 / %x23-28 / %x2A-5B / %x5D-10FFFF ;
+
+date-full       = 4DIGIT ;
+date-month      = 2DIGIT ;
+date-mday       = 2DIGIT ;
+time-hour       = 2DIGIT ;
+time-minute     = 2DIGIT ;
+time-second     = 2DIGIT ;
+time-secfrac    = 1*DIGIT ;
