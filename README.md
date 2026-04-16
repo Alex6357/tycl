@@ -1,17 +1,16 @@
 # Typed Configuration Language (TyCL)
 
-TyCL 是一门专为现代软件工程设计的**强类型配置与数据序列化语言**。
+TyCL 是一门**带类型注解的配置语言**。
 
-它诞生于对现有配置格式（如 JSON 的死板、YAML 的缩进歧义、TOML 的长键冗余）的反思。TyCL 结合了 **JSON 的嵌套直观性**、**Rust 的 Raw 字符串体验**、**Scala 的对齐多行字符串**，并首次在配置领域引入了原生的**渐进式类型注解系统**。
+它诞生于对现有配置格式（如 JSON 的死板、YAML 的缩进歧义、TOML 的长键冗余）的反思。TyCL 回归了 JSON 的嵌套直观性，**引入了先进的字符串系统**，并引入了原生的**渐进式类型注解系统**。
 
 ## 🌟 核心特性
 
 1. **内建静态类型与 Schema 校验**：直接在配置中声明结构，支持基本类型、复杂容器与可空标识 (`?`)。
-2. **拒绝过度压缩歧义**：顶层键值对严格要求换行分割，代码清晰易读。
-3. **JSON 风格的嵌套表**：抛弃 TOML 冗长的 `[a.b.c.d]` 前缀，回归直观的 `{}` 树状作用域。
-4. **地表最强字符串系统**：5 种字符串模式任君选择，彻底解决代码缩进破坏字符串内容的痛点。
-5. **原生时间支持**：开箱即用的 ISO 8601 时间类型。
-6. **Rust 生态原生集成**：提供 CLI 工具、Schema 驱动的 Rust 代码生成、以及 `TryFromValue` Derive 宏。
+2. **JSON 风格的嵌套表**：抛弃 TOML 冗长的 `[a.b.c.d]` 前缀，回归直观的 `{}` 树状作用域。
+3. **地表最强字符串系统**：5 种字符串模式任君选择，彻底解决代码缩进破坏字符串内容的痛点。
+4. **原生时间支持**：开箱即用的 ISO 8601 时间类型。
+5. **Rust 生态原生集成**：提供 CLI 工具、Schema 驱动的 Rust 代码生成、以及 `TryFromValue` Derive 宏。
 
 ---
 
@@ -67,7 +66,7 @@ max_workers: int = 16_000  // 支持数字下划线
 
 ### 2. 容器：Map、List、Record 与 Tuple
 
-在 `map` 和 `list` 内部，不再强制要求换行，元素之间**严格使用逗号 `,` 分隔**。原生支持**尾随逗号**，对 Git Diff 极其友好。
+在 `map` 和 `list` 内部，不再强制要求换行，元素之间**严格使用逗号 `,` 分隔**，支持**尾随逗号**。
 
 ```tycl
 endpoints: list(str) = [ "/api", "/graphql", ]
@@ -83,7 +82,7 @@ database: record(Database)(
 pair: tuple(int, str) = (42, "answer")
 ```
 
-Record 和 Tuple 支持显式命名（如 `record(Database)`），这在 Schema 驱动的 Rust 代码生成中是必需的。
+Record、Tuple 和 Enum 支持显式命名（如 `record(Database)`），这在 Schema 驱动的 Rust 代码生成中是必需的。
 
 ### 3. 枚举与环境变量
 
@@ -96,7 +95,18 @@ token: env("API_TOKEN", str) = "default-token"
 枚举元素和字段名均支持通过 `(alias)` 语法指定映射名称，方便 Rust 代码生成时的命名转换：
 
 ```tycl
-log_level: enum("debug" (dbg), "info", "warn" (warning), "error") = "info"
+log_level: enum(Level)("debug"(Dbg), "info"(Info), "warn"(Warning), "error"(Error)) = "info"
+```
+
+示例生成：
+
+```rust
+pub enum Level {
+    Dbg,
+    Info,
+    Warning,
+    Error
+}
 ```
 
 ### 4. 五大字符串魔法 🪄
@@ -122,20 +132,21 @@ regex: str = r#"^[a-z]+(?:/[a-z]+)*$"#
 json_str: str = r##"{"key": "value"}"##
 ```
 
-#### 模式 C：多行对齐字符串 (`|"""`) ✨ [杀手级特性]
+#### 模式 C：多行对齐字符串 (`|"""`)
 
 在传统的配置语言中，多行字符串的缩进往往会破坏内容原有的格式。TyCL 引入了 `|` 触发器，不仅维持了代码缩进的美观，还能精确控制逻辑换行：
 
 ```tycl
 query: str = |"""
-             |SELECT id, name
-             |FROM users
-             |WHERE age > 18
-             |"""
+    |SELECT id, name
+    |FROM users
+    |WHERE age > 18
+    |
+"""
 ```
 
 **解析结果：** `SELECT id, name\nFROM users\nWHERE age > 18\n`
-_(解析器会自动剥离 `|` 之前的所有空白字符!)_
+_(解析器会自动剥离 `|` 之前的所有空白字符)_
 
 #### 模式 D：多行对齐字面量 (`r|#"`)
 
@@ -143,10 +154,10 @@ _(解析器会自动剥离 `|` 之前的所有空白字符!)_
 
 ```tycl
 lua_script: str = r|#"
-                  |function setup()
-                  |    print("Absolutely no \\n escape needed!")
-                  |end
-                  |"#
+    |function setup()
+    |    print("Absolutely no \\n escape needed!")
+    |end
+"#
 ```
 
 ### 5. 第一公民的时间类型
@@ -202,4 +213,4 @@ let json = serde_json::to_string_pretty(&doc)?;
 2. **Why 容器内严格使用逗号？**
    YAML 中缩进决定层级的做法容易导致线上事故。TyCL 在大括号嵌套中强制使用逗号 `,`，让数据结构的边界像 JSON 一样绝对清晰。
 3. **Why 引入类型？**
-   在微服务时代，配置即契约（Config as a Contract）。类型前置不仅能让 IDE 提供精准提示，还能在启动阶段依靠 Schema 将错误拦截，避免运行时的类型转换异常。
+   在微服务时代，配置即契约。类型前置不仅能让 IDE 提供精准提示，还能在启动阶段依靠 Schema 将错误拦截，避免运行时的类型转换异常。
